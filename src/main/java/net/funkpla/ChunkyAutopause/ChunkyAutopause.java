@@ -25,8 +25,7 @@ import java.util.Objects;
 
 // The value here should match an entry in the META-INF/mods.toml file
 @Mod(ChunkyAutopause.MODID)
-public class ChunkyAutopause
-{
+public class ChunkyAutopause {
     // Define mod id in a common place for everything to reference
     public static final String MODID = "chunky_autopause";
     // Directly reference a slf4j logger
@@ -38,8 +37,7 @@ public class ChunkyAutopause
     private static int resumeDeadline;
     private ResumeTimer resumeTimer;
 
-    public ChunkyAutopause()
-    {
+    public ChunkyAutopause() {
         suspendedTasks = new HashSet<>();
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::commonSetup);
@@ -51,7 +49,7 @@ public class ChunkyAutopause
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event){
+    private void commonSetup(final FMLCommonSetupEvent event) {
         enabled = Config.enableOnStartup;
         resumeDeadline = Config.resumeWaitTicks;
         resumeTimer = new ResumeTimer(resumeDeadline);
@@ -59,8 +57,7 @@ public class ChunkyAutopause
 
 
     @SubscribeEvent
-    public void onServerStarted(final ServerStartedEvent event)
-    {
+    public void onServerStarted(final ServerStartedEvent event) {
         chunky = ChunkyProvider.get();
         chunkyApi = new ChunkyAPIImpl(chunky);
         chunky.getServer().getWorlds().forEach(world -> {
@@ -80,7 +77,7 @@ public class ChunkyAutopause
     }
 
     @SubscribeEvent
-    public void  onPlayerDisconnect(PlayerEvent.PlayerLoggedOutEvent event){
+    public void onPlayerDisconnect(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!enabled) return;
         LOGGER.debug("Player logged out.");
         var count = Objects.requireNonNull(event.getEntity().getServer()).getPlayerCount();
@@ -89,14 +86,14 @@ public class ChunkyAutopause
     }
 
     @SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event){
+    public void onServerTick(TickEvent.ServerTickEvent event) {
         resumeTimer.tick();
     }
 
     private HashSet<World> getTasks() {
         var tasks = new HashSet<World>();
-        chunky.getServer().getWorlds().forEach(world ->{
-            if (chunkyApi.isRunning(world.getName())){
+        chunky.getServer().getWorlds().forEach(world -> {
+            if (chunkyApi.isRunning(world.getName())) {
                 tasks.add(world);
             }
         });
@@ -106,9 +103,9 @@ public class ChunkyAutopause
     private void suspend() {
         LOGGER.info("Suspending chunky tasks");
         resumeTimer.cancel();
-        getTasks().forEach(task ->{
+        getTasks().forEach(task -> {
             var name = task.getName();
-            if ( chunkyApi.pauseTask(name)) {
+            if (chunkyApi.pauseTask(name)) {
                 suspendedTasks.add(task);
                 LOGGER.debug("Suspended task {}", name);
             }
@@ -117,7 +114,7 @@ public class ChunkyAutopause
 
     private void resume() {
         LOGGER.info("Resuming Chunky Tasks");
-        new HashSet<>(suspendedTasks).stream().forEach(task->{
+        new HashSet<>(suspendedTasks).stream().forEach(task -> {
             var name = task.getName();
             if (chunkyApi.continueTask(name)) {
                 suspendedTasks.remove(task);
@@ -127,29 +124,28 @@ public class ChunkyAutopause
         assert suspendedTasks.isEmpty();
     }
 
-    private class ResumeTimer
-    {
+    private class ResumeTimer {
         private int tickCount;
         private final int deadline;
         private boolean started;
 
-        public ResumeTimer(int deadline)
-        {
+        public ResumeTimer(int deadline) {
             tickCount = 0;
             started = false;
             this.deadline = deadline;
         }
-        public void start(){
+
+        public void start() {
             tickCount = 0;
             started = true;
         }
 
-        public void cancel(){
+        public void cancel() {
             started = false;
             tickCount = 0;
         }
 
-        public void tick(){
+        public void tick() {
             if (!started) return;
             tickCount++;
             if (tickCount >= deadline) {
