@@ -36,7 +36,7 @@ public class ChunkyAutopause
     private static ChunkyAPI chunkyApi;
     private final HashSet<World> suspendedTasks;
     private static int resumeDeadline;
-    private final ResumeTimer timer = new ResumeTimer(resumeDeadline);
+    private ResumeTimer resumeTimer;
 
     public ChunkyAutopause()
     {
@@ -54,6 +54,7 @@ public class ChunkyAutopause
     private void commonSetup(final FMLCommonSetupEvent event){
         enabled = Config.enableOnStartup;
         resumeDeadline = Config.resumeWaitTicks;
+        resumeTimer = new ResumeTimer(resumeDeadline);
     }
 
 
@@ -84,18 +85,18 @@ public class ChunkyAutopause
         LOGGER.debug("Player logged out.");
         var count = Objects.requireNonNull(event.getEntity().getServer()).getPlayerCount();
         LOGGER.debug("Server population is :{}", count);
-        timer.start();
+        if (count <= 1) resumeTimer.start();
     }
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event){
-        timer.tick();
+        resumeTimer.tick();
     }
 
     private HashSet<World> getTasks() {
         var tasks = new HashSet<World>();
         chunky.getServer().getWorlds().forEach(world ->{
-            if (chunkyApi.isRunning(world.toString())) {
+            if (chunkyApi.isRunning(world.getName())){
                 tasks.add(world);
             }
         });
@@ -104,23 +105,23 @@ public class ChunkyAutopause
 
     private void suspend() {
         LOGGER.info("Suspending chunky tasks");
-        timer.cancel();
+        resumeTimer.cancel();
         getTasks().forEach(task ->{
-            if (chunkyApi.isRunning(task.getName())){
-                if (chunkyApi.pauseTask(task.getName())) {
-                    suspendedTasks.add(task);
-                    LOGGER.debug("Suspended task {}", task);
-                }
+            var name = task.getName();
+            if ( chunkyApi.pauseTask(name)) {
+                suspendedTasks.add(task);
+                LOGGER.debug("Suspended task {}", name);
             }
         });
     }
 
     private void resume() {
         LOGGER.info("Resuming Chunky Tasks");
-        suspendedTasks.forEach(task->{
-            if (chunkyApi.continueTask(task.getName())) {
+        new HashSet<>(suspendedTasks).stream().forEach(task->{
+            var name = task.getName();
+            if (chunkyApi.continueTask(name)) {
                 suspendedTasks.remove(task);
-                LOGGER.debug("Resumed task {}", task);
+                LOGGER.debug("Resumed task {}", name);
             }
         });
         assert suspendedTasks.isEmpty();
@@ -139,6 +140,7 @@ public class ChunkyAutopause
             this.deadline = deadline;
         }
         public void start(){
+            tickCount = 0;
             started = true;
         }
 
