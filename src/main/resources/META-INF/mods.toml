@@ -65,8 +65,8 @@ description='''${mod_description}'''
 [[dependencies.${mod_id}]]
     modId="chunky"
     mandatory=true
-    ordering="AFTER"
-    side="SERVER"
+    ordering="BEFORE"
+    side="BOTH"
     versionRange="[1.3.146,)"
 
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares

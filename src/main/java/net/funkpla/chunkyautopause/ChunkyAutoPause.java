@@ -1,7 +1,10 @@
-package net.funkpla.ChunkyAutopause;
+package net.funkpla.chunkyautopause;
 
+import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.logging.LogUtils;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
@@ -24,20 +27,19 @@ import java.util.HashSet;
 import java.util.Objects;
 
 // The value here should match an entry in the META-INF/mods.toml file
-@Mod(ChunkyAutopause.MODID)
-public class ChunkyAutopause {
+@Mod(ChunkyAutoPause.MODID)
+public class ChunkyAutoPause {
     // Define mod id in a common place for everything to reference
-    public static final String MODID = "chunky_autopause";
+    public static final String MODID = "chunkyautopause";
     // Directly reference a slf4j logger
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static boolean enabled;
+    private boolean enabled;
     private static Chunky chunky;
     private static ChunkyAPI chunkyApi;
     private final HashSet<World> suspendedTasks;
-    private static int resumeDeadline;
     private ResumeTimer resumeTimer;
 
-    public ChunkyAutopause() {
+    public ChunkyAutoPause() {
         suspendedTasks = new HashSet<>();
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::commonSetup);
@@ -47,12 +49,12 @@ public class ChunkyAutopause {
 
         // Register our mod's ForgeConfigSpec so that Forge can create and load the config file for us
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        Provider.register(this);
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event) {
-        enabled = Config.enableOnStartup;
-        resumeDeadline = Config.resumeWaitTicks;
-        resumeTimer = new ResumeTimer(resumeDeadline);
+    private void commonSetup(final FMLCommonSetupEvent ignoredEvent) {
+        setEnabled(Config.enableOnStartup);
+        resumeTimer = new ResumeTimer(Config.resumeWaitTicks);
     }
 
 
@@ -69,19 +71,24 @@ public class ChunkyAutopause {
 
     @SubscribeEvent
     public void onPlayerConnect(PlayerLoggedInEvent event) {
-        if (!enabled) return;
-        LOGGER.debug("Player logged in.");
+        if (!isEnabled()) return;
         var count = Objects.requireNonNull(event.getEntity().getServer()).getPlayerCount();
-        LOGGER.debug("Server population is :{}", count);
+        LOGGER.debug("Player logged in. Server population is :{}", count);
         suspend();
     }
 
     @SubscribeEvent
+    public void onRegisterCommandsEvent(RegisterCommandsEvent event) {
+        LOGGER.debug("Registering commands, maybe?");
+        CommandDispatcher<CommandSourceStack> commandDispatcher = event.getDispatcher();
+        AutoPauseEnableCommand.register(commandDispatcher);
+    }
+
+    @SubscribeEvent
     public void onPlayerDisconnect(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (!enabled) return;
-        LOGGER.debug("Player logged out.");
+        if (!isEnabled()) return;
         var count = Objects.requireNonNull(event.getEntity().getServer()).getPlayerCount();
-        LOGGER.debug("Server population is :{}", count);
+        LOGGER.debug("Player logged out. Server population is :{}", count);
         if (count <= 1) resumeTimer.start();
     }
 
@@ -114,7 +121,7 @@ public class ChunkyAutopause {
 
     private void resume() {
         LOGGER.info("Resuming Chunky Tasks");
-        new HashSet<>(suspendedTasks).stream().forEach(task -> {
+        new HashSet<>(suspendedTasks).forEach(task -> {
             var name = task.getName();
             if (chunkyApi.continueTask(name)) {
                 suspendedTasks.remove(task);
@@ -122,6 +129,15 @@ public class ChunkyAutopause {
             }
         });
         assert suspendedTasks.isEmpty();
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+        LOGGER.debug("Enabled:{}", this.enabled);
     }
 
     private class ResumeTimer {
