@@ -3,19 +3,17 @@ package net.funkpla.chunkyautopause;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.logging.LogUtils;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import org.popcraft.chunky.Chunky;
 import org.popcraft.chunky.api.ChunkyAPIImpl;
 import org.popcraft.chunky.platform.World;
@@ -39,17 +37,14 @@ public class ChunkyAutoPause {
     private final HashSet<World> suspendedTasks;
     private ResumeTimer resumeTimer;
 
-    public ChunkyAutoPause() {
+    public ChunkyAutoPause(IEventBus modEventBus, ModContainer container) {
         suspendedTasks = new HashSet<>();
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::commonSetup);
 
         // Register ourselves for server and other game events we are interested in
-        MinecraftForge.EVENT_BUS.register(this);
-
-        // Register our mod's ForgeConfigSpec so that Forge can create and load the config file for us
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        NeoForge.EVENT_BUS.register(this);
         Provider.register(this);
+        container.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
     private void commonSetup(final FMLCommonSetupEvent ignoredEvent) {
@@ -70,7 +65,7 @@ public class ChunkyAutoPause {
     }
 
     @SubscribeEvent
-    public void onPlayerConnect(PlayerLoggedInEvent event) {
+    public void onPlayerConnect(PlayerEvent.PlayerLoggedInEvent event) {
         if (!isEnabled()) return;
         var count = Objects.requireNonNull(event.getEntity().getServer()).getPlayerCount();
         LOGGER.debug("Player logged in. Server population is :{}", count);
@@ -93,7 +88,7 @@ public class ChunkyAutoPause {
     }
 
     @SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event) {
+    public void onServerTick(ServerTickEvent.Pre event) {
         resumeTimer.tick();
     }
 
@@ -141,6 +136,7 @@ public class ChunkyAutoPause {
     }
 
     private class ResumeTimer {
+
         private int tickCount;
         private final int deadline;
         private boolean started;
